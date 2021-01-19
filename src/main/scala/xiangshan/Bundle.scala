@@ -184,11 +184,9 @@ class CtrlFlow extends XSBundle {
   val intrVec = Vec(12, Bool())
   val brUpdate = new CfiUpdateInfo
   val crossPageIPFFix = Bool()
-
   //sfb signals
   val is_sfb_br = Bool()
   val is_sfb_shadow = Bool()
-
 }
 
 // Decode DecodeWidth insts at Decode Stage
@@ -226,10 +224,9 @@ class CfCtrl extends XSBundle {
   val cf = new CtrlFlow
   val ctrl = new CtrlSignals
   val brTag = new BrqPtr
-
-  //sfb signals
-  def is_sfb_br     = cf.is_sfb_br
-  def is_sfb_shadow = cf.is_sfb_shadow
+    //sfb signals
+  def is_sfb_br     = cf.is_sfb_br     
+  def is_sfb_shadow = cf.is_sfb_shadow 
 }
 
 class LSIdx extends XSBundle {
@@ -245,8 +242,6 @@ class MicroOp extends CfCtrl {
   val lqIdx = new LqPtr
   val sqIdx = new SqPtr
   val diffTestDebugLrScValid = Bool()
-
-  //sfb signals
   val ppredState = SrcState()
   val ppred = UInt(log2Ceil(BrqSize).W)
   val predData = Bool()
@@ -275,9 +270,9 @@ class ReplayPregReq extends XSBundle {
   // NOTE: set isInt and isFp both to 'false' when invalid
   val isInt = Bool()
   val isFp = Bool()
-  val isShadow = Bool()
   val preg = UInt(PhyRegIdxWidth.W)
   val ppred = UInt(PredWidth.W)
+  val isShadow = Bool()
 }
 
 class DebugBundle extends XSBundle{

@@ -87,9 +87,14 @@ class Rename extends XSModule {
   val needFpDest = Wire(Vec(RenameWidth, Bool()))
   val needIntDest = Wire(Vec(RenameWidth, Bool()))
 
-    //for SFB
+  //for SFB
   val current_brq_idx = Reg(UInt(PredWidth.W))
   var next_brq_idx = current_brq_idx
+
+  if(EnableSFB){
+      current_brq_idx := next_brq_idx
+      XSInfo("current_brq_idx: %d\n",current_brq_idx.asUInt)
+  }
 
   val hasValid = Cat(io.in.map(_.valid)).orR
   val canOut = io.out(0).ready && fpFreeList.req.canAlloc && intFreeList.req.canAlloc && !io.roqCommits.isWalk
@@ -166,20 +171,19 @@ class Rename extends XSModule {
     //SFB Renaming
     //usging brq index to rename every sfb
     //register the sfb index to give the shadow instructions a ppred to listen
-    val brqIdx = uops(i).cf.brUpdate.brTag.value
-    when (uops(i).is_sfb_br){
-      uops(i).pdest := brqIdx
-    }
-    next_brq_idx = Mux(uops(i).is_sfb_br, brqIdx, next_brq_idx)
+    if(EnableSFB){
+      val brqIdx = uops(i).cf.brUpdate.brTag.value
+      when (uops(i).is_sfb_br){
+        uops(i).pdest := brqIdx
+      }
+      next_brq_idx = Mux(uops(i).is_sfb_br, brqIdx, next_brq_idx)
 
-    when(uops(i).is_sfb_shadow){
-      uops(i).ppred := next_brq_idx
+      when(uops(i).is_sfb_shadow){
+        uops(i).ppred := next_brq_idx
+      }
     }
   }
 
-  XSInfo("current_brq_idx: %d\n",current_brq_idx.asUInt)
-
-  current_brq_idx := next_brq_idx
 
 
   // We don't bypass the old_pdest from valid instructions with the same ldest currently in rename stage.

@@ -36,15 +36,17 @@ class Dispatch extends XSModule {
     // read regfile
     val readIntRf = Vec(NRIntReadPorts, Flipped(new RfReadPort))
     val readFpRf = Vec(NRFpReadPorts, Flipped(new RfReadPort))
-    val readPdRf = Vec(NRPdReadPorts, Flipped(new PdReadPort))
     // read reg status (busy/ready)
     val intPregRdy = Vec(NRIntReadPorts, Input(Bool()))
     val fpPregRdy = Vec(NRFpReadPorts, Input(Bool()))
-    val pdPregRdy = Vec(NRPdReadPorts, Input(Bool()))
     // to reservation stations
     val numExist = Input(Vec(exuParameters.ExuCnt, UInt(log2Ceil(IssQueSize).W)))
     val enqIQCtrl = Vec(exuParameters.ExuCnt, DecoupledIO(new MicroOp))
     val enqIQData = Vec(exuParameters.ExuCnt, Output(new ExuInput))
+    // SFB
+    val pdPregRdy = Vec(NRPdReadPorts, Input(Bool()))
+    val readPdRf = Vec(NRPdReadPorts, Flipped(new PdReadPort))
+
   })
 
   val dispatch1 = Module(new Dispatch1)
@@ -80,8 +82,17 @@ class Dispatch extends XSModule {
   intDispatch.io.fromDq <> intDq.io.deq
   intDispatch.io.readRf.zipWithIndex.map({case (r, i) => r <> io.readIntRf(i)})
   intDispatch.io.regRdy.zipWithIndex.map({case (r, i) => r <> io.intPregRdy(i)})
-  intDispatch.io.readPd.zipWithIndex.map({case (r, i) => r <> io.readPdRf(i)})
-  intDispatch.io.predRdy.zipWithIndex.map({case (r, i) => r <> io.pdPregRdy(i)})
+  if(EnableSFB) {
+    intDispatch.io.predRdy.zipWithIndex.map({case (r, i) => r <> io.pdPregRdy(i)})
+    intDispatch.io.readPd.zipWithIndex.map({case (r, i) => r <> io.readPdRf(i)})
+  }
+  else {
+    io.pdPregRdy <> DontCare
+    io.readPdRf <> DontCare
+    intDispatch.io.predRdy <>  DontCare
+    intDispatch.io.readPd  <> DontCare
+
+  }
   intDispatch.io.numExist.zipWithIndex.map({case (num, i) => num := io.numExist(i)})
   intDispatch.io.enqIQCtrl.zipWithIndex.map({case (enq, i) => enq <> io.enqIQCtrl(i)})
   intDispatch.io.enqIQData.zipWithIndex.map({case (enq, i) => enq <> io.enqIQData(i)})

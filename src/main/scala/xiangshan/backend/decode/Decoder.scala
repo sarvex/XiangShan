@@ -201,17 +201,21 @@ class Decoder extends XSModule with HasInstrType {
 
   io.out.ctrl.isRVF := instr(26, 25) === 0.U
 
-  //deal with SFB
-  io.out.ctrl.lrs1_is_lrd := io.in.is_sfb_shadow
+  if(EnableSFB){
+    //deal with SFB
+    io.out.ctrl.lrs1_is_lrd := io.in.is_sfb_shadow
 
-  when(io.in.is_sfb_shadow && instrType === InstrI ){
-    io.out.ctrl.src2Type    := SrcType.reg
-    io.out.ctrl.lsrc2       := rfDest
-    io.out.ctrl.lrs1_is_lrd  := false.B
-  }.elsewhen(io.in.is_sfb_shadow && fuOpType === ALUOpType.add && fuType === FuType.alu && rfSrc1 === 0.U){
-    io.out.ctrl.fuOpType := ALUOpType.mov
-    io.out.ctrl.lsrc1 := rfDest
-    io.out.ctrl.lrs1_is_lrd  := true.B
+    when(io.in.is_sfb_shadow && instrType === InstrI ){
+      io.out.ctrl.src2Type    := SrcType.reg
+      io.out.ctrl.lsrc2       := rfDest
+      io.out.ctrl.lrs1_is_lrd  := false.B
+    }.elsewhen(io.in.is_sfb_shadow && fuOpType === ALUOpType.add && fuType === FuType.alu && rfSrc1 === 0.U){
+      io.out.ctrl.fuOpType := ALUOpType.mov
+      io.out.ctrl.lsrc1 := rfDest
+      io.out.ctrl.lrs1_is_lrd  := true.B
+    }
+  } else {
+     io.out.ctrl.lrs1_is_lrd := DontCare
   }
 
 

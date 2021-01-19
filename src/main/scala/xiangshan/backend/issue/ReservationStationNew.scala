@@ -91,14 +91,20 @@ class ReservationStationCtrl
   val validQueue    = stateQueue.map(_ === s_valid)
   val emptyQueue    = stateQueue.map(_ === s_idle)
   val srcQueue      = Reg(Vec(iqSize, Vec(srcNum, Bool())))
-  val predQueue     = Reg(Vec(iqSize, Bool()))
   val cntQueue      = Reg(Vec(iqSize, UInt(log2Up(replayDelay).W)))
+  val predQueue     = Reg(Vec(iqSize, Bool()))
 
   // rs queue part:
   // val tailPtr       = RegInit(0.U((iqIdxWidth+1).W))
   val tailPtr       = RegInit(0.U.asTypeOf(new CircularQueuePtr(iqSize)))
   val idxQueue      = RegInit(VecInit((0 until iqSize).map(_.U(iqIdxWidth.W))))
-  val readyQueue    = VecInit(srcQueue.zip(validQueue).zip(predQueue).map{ case ((a,b),c) => Cat(a).andR & b & c})
+  val readyQueue    = Wire(Vec(iqSize, Bool()))
+
+  if(EnableSFB) {
+    readyQueue  := srcQueue.zip(validQueue).zip(predQueue).map{ case ((a,b),c) => Cat(a).andR & b & c}
+  } else {
+    readyQueue  := srcQueue.zip(validQueue).map{ case (a,b) => Cat(a).andR & b }     
+  }
 
   // redirect
   val redHitVec   = VecInit((0 until iqSize).map(i => io.data.redVec(idxQueue(i))))
@@ -153,7 +159,7 @@ class ReservationStationCtrl
     when(moveMask(i)){
       idxQueue(i)   := idxQueue(i+1)
       srcQueue(i).zip(srcQueue(i+1)).map{case (a,b) => a := b}
-      predQueue(i) := predQueue(i+1)
+      if(EnableSFB) {predQueue(i) := predQueue(i+1)}
       stateQueue(i) := stateQueue(i+1)
     }
   }
@@ -198,10 +204,12 @@ class ReservationStationCtrl
           XSDebug(p"srcHit: i:${i.U} j:${j.U} moveMask(${i.U}):${moveMask(i)} nextIdx:${nextIdx}")
         }
       }
-      val hitSig = io.data.predUpdate(idxQueue(i))
-      when (hitSig && validQueue(i)) {
-        predQueue(nextIdx) := true.B
-        XSDebug(p"predHit: i:${i.U}\n")
+      if(EnableSFB){
+        val hitSig = io.data.predUpdate(idxQueue(i))
+        when (hitSig && validQueue(i)) {
+          predQueue(nextIdx) := true.B
+          XSDebug(p"predHit: i:${i.U}\n")
+        }
       }
     } else { when (!moveMask(i)) {
       val nextIdx = i
@@ -225,10 +233,12 @@ class ReservationStationCtrl
           XSDebug(p"srcHit: i:${i.U} j:${j.U} moveMask(${i.U}):${moveMask(i)} nextIdx:${nextIdx}")    
         }
       }
-      val hitSig = io.data.predUpdate(idxQueue(i))
-      when (hitSig && validQueue(i)) {
-        predQueue(nextIdx) := true.B
-        XSDebug(p"predHit: i:${i.U}\n")
+      if(EnableSFB){
+        val hitSig = io.data.predUpdate(idxQueue(i))
+        when (hitSig && validQueue(i)) {
+          predQueue(nextIdx) := true.B
+          XSDebug(p"predHit: i:${i.U}\n")
+        }
       }
     }}
     }
@@ -254,7 +264,6 @@ class ReservationStationCtrl
 
   val enqIdx_ctrl = tailAfterRealDeq.value
   val enqBpVec = io.data.srcUpdate(IssQueSize)
-  val enqBpPred = io.data.predUpdate(IssQueSize)
 
   def stateCheck(src: UInt, srcType: UInt): Bool = {
     (srcType =/= SrcType.reg && srcType =/= SrcType.fp) ||
@@ -267,7 +276,11 @@ class ReservationStationCtrl
       s := Mux(enqBpVec(i) || stateCheck(srcSeq(i), srcTypeSeq(i)), true.B,
                srcStateSeq(i)===SrcState.rdy)
     }
-    predQueue(enqIdx_ctrl) := Mux(enqUop.is_sfb_shadow && !enqBpPred, enqUop.ppredState === SrcState.rdy, true.B)
+    if(EnableSFB) {
+      val enqBpPred = io.data.predUpdate(IssQueSize)
+      predQueue(enqIdx_ctrl) := Mux(enqUop.is_sfb_shadow && !enqBpPred, enqUop.ppredState === SrcState.rdy, true.B)
+    }
+      
     XSDebug(p"EnqCtrl: roqIdx:${enqUop.roqIdx} pc:0x${Hexadecimal(enqUop.cf.pc)} " +
       p"src1:${srcSeq(0)} state:${srcStateSeq(0)} type:${srcTypeSeq(0)} src2:${srcSeq(1)} " +
       p" state:${srcStateSeq(1)} type:${srcTypeSeq(1)} src3:${srcSeq(2)} state:${srcStateSeq(2)} " +
@@ -370,14 +383,14 @@ class ReservationStationData
   when (enqEn) {
     uop(enqPtr) := enqUop
     XSDebug(p"enqCtrl: enqPtr:${enqPtr} src1:${enqUop.psrc1}|${enqUop.src1State}|${enqUop.ctrl.src1Type}" +
-      p" src2:${enqUop.psrc2}|${enqUop.src2State}|${enqUop.ctrl.src2Type} src3:${enqUop.psrc3}| pred:${enqUop.ppred} ${enqUop.ppredState} |" +
+      p" src2:${enqUop.psrc2}|${enqUop.src2State}|${enqUop.ctrl.src2Type} src3:${enqUop.psrc3}|" +
       p"${enqUop.src3State}|${enqUop.ctrl.src3Type} pc:0x${Hexadecimal(enqUop.cf.pc)} roqIdx:${enqUop.roqIdx}\n")
   }
   when (enqEnReg) { // TODO: turn to srcNum, not the 3
     data(enqPtrReg)(0) := io.enqData.src1
     data(enqPtrReg)(1) := io.enqData.src2
     data(enqPtrReg)(2) := io.enqData.src3
-    uop(enqPtrReg).predData := io.enqData.uop.predData
+    if(EnableSFB) uop(enqPtrReg).predData := io.enqData.uop.predData 
     XSDebug(p"enqData: enqPtrReg:${enqPtrReg} src1:${Hexadecimal(io.enqData.src1)}" +
             p" src2:${Hexadecimal(io.enqData.src2)} src3:${Hexadecimal(io.enqData.src2)}\n")
   }
@@ -418,13 +431,9 @@ class ReservationStationData
   }
 
   io.ctrl.srcUpdate.map(a => a.map(_ := false.B))
-  io.ctrl.predUpdate.map(_ := false.B)
   for (i <- 0 until iqSize) {
     val srcSeq = Seq(uop(i).psrc1, uop(i).psrc2, uop(i).psrc3)
     val srcTypeSeq = Seq(uop(i).ctrl.src1Type, uop(i).ctrl.src2Type, uop(i).ctrl.src3Type)
-    val ppred = uop(i).ppred
-    val is_sfb_shadow = uop(i).is_sfb_shadow
-    val shadowReg = RegNext(is_sfb_shadow)
     for (j <- 0 until 3) {
       val (wuHit, wuData) = wakeup(srcSeq(j), srcTypeSeq(j))
       val (bpHit, bpHitReg, bpData) = bypass(src=srcSeq(j), srcType=srcTypeSeq(j))
@@ -440,13 +449,20 @@ class ReservationStationData
       XSDebug(bpHitReg, p"BPHitData: (${i.U})(${j.U}) Data:0x${Hexadecimal(bpData)} i:${i.U} j:${j.U}\n")
     }
 
-    //deal with sfb
-    val (bpHit, bpHitReg, bpData) = predBypass(pred=ppred, isShadow=is_sfb_shadow)
-    when (bpHit && is_sfb_shadow) {  io.ctrl.predUpdate(i) := true.B}
-    when (bpHitReg && !(enqPtrReg===i.U && enqEnReg) && shadowReg) { uop(i).predData := bpData(0).asBool }
-    XSDebug(bpHit, p"predBPHit: (${i.U}) i:${i.U} \n")
-    XSDebug(bpHitReg, p"predBPHitData: (${i.U}) Data:0x${Hexadecimal(bpData)} i:${i.U}\n")
-
+    if(EnableSFB){
+      val ppred = uop(i).ppred
+      val is_sfb_shadow = uop(i).is_sfb_shadow
+      val shadowReg = RegNext(is_sfb_shadow)
+      io.ctrl.predUpdate.map(_ := false.B)
+      //deal with sfb
+      val (bpHit, bpHitReg, bpData) = predBypass(pred=ppred, isShadow=is_sfb_shadow)
+      when (bpHit && is_sfb_shadow) {  io.ctrl.predUpdate(i) := true.B}
+      when (bpHitReg && !(enqPtrReg===i.U && enqEnReg) && shadowReg) { uop(i).predData := bpData(0).asBool }
+      XSDebug(bpHit, p"predBPHit: (${i.U}) i:${i.U} \n")
+      XSDebug(bpHitReg, p"predBPHitData: (${i.U}) Data:0x${Hexadecimal(bpData)} i:${i.U}\n")
+    } else {
+      io.ctrl.predUpdate(i) :=DontCare
+    }
   }
 
   // deq
@@ -460,7 +476,7 @@ class ReservationStationData
   // to ctrl
   val srcSeq = Seq(enqUop.psrc1, enqUop.psrc2, enqUop.psrc3)
   val srcTypeSeq = Seq(enqUop.ctrl.src1Type, enqUop.ctrl.src2Type, enqUop.ctrl.src3Type)
-  val shadowReg = RegNext(enqUop.is_sfb_shadow)
+  if(EnableSFB) {val shadowReg = RegNext(enqUop.is_sfb_shadow)}
   io.ctrl.srcUpdate(IssQueSize).zipWithIndex.map{ case (h, i) =>
     val (bpHit, bpHitReg, bpData)= bypass(srcSeq(i), srcTypeSeq(i), enqCtrl.valid)
     when (bpHitReg) { data(enqPtrReg)(i) := bpData }
@@ -470,9 +486,13 @@ class ReservationStationData
     XSDebug(bpHitReg, p"EnqBPHitData: (${i.U}) data:${Hexadecimal(bpData)}\n")
   }
 
-  val (bpHit, bpHitReg, bpData) = predBypass(valid=enqCtrl.fire(),pred=enqUop.ppred, isShadow=enqUop.is_sfb_shadow)
-  when(bpHitReg) {uop(enqPtrReg).predData := bpData(0).asBool}
-  io.ctrl.predUpdate(IssQueSize) := bpHit
+  if(EnableSFB){
+    val (bpHit, bpHitReg, bpData) = predBypass(valid=enqCtrl.fire(),pred=enqUop.ppred, isShadow=enqUop.is_sfb_shadow)
+    when(bpHitReg) {uop(enqPtrReg).predData := bpData(0).asBool}
+    io.ctrl.predUpdate(IssQueSize) := bpHit
+  } else {
+    io.ctrl.predUpdate(IssQueSize) := DontCare
+  }
 
   io.ctrl.fuReady  := Mux(notBlock, true.B, io.deq.ready)
   io.ctrl.redVec   := VecInit(uop.map(_.roqIdx.needFlush(io.redirect))).asUInt
@@ -497,7 +517,6 @@ class ReservationStationData
 
     XSDebug(io.selectedUop.valid, p"SelUop: pc:0x${Hexadecimal(io.selectedUop.bits.cf.pc)}" +
       p" roqIdx:${io.selectedUop.bits.roqIdx} pdest:${io.selectedUop.bits.pdest} " +
-      p" ppred:${io.selectedUop.bits.ppred} predData:${io.selectedUop.bits.predData}" +
       p"rfWen:${io.selectedUop.bits.ctrl.rfWen} fpWen:${io.selectedUop.bits.ctrl.fpWen}\n" )
   }
 
@@ -507,13 +526,12 @@ class ReservationStationData
   XSDebug(true.B, p"out(${io.deq.valid} ${io.deq.ready})\n")
   XSDebug(io.deq.valid, p"Deq(${io.deq.valid} ${io.deq.ready}): deqPtr:${deq} pc:${Hexadecimal(io.deq.bits.uop.cf.pc)}" +
     p" roqIdx:${io.deq.bits.uop.roqIdx} src1:${Hexadecimal(io.deq.bits.src1)} " +
-    p" src2:${Hexadecimal(io.deq.bits.src2)} src3:${Hexadecimal(io.deq.bits.src3)} pred:${Hexadecimal(io.deq.bits.uop.predData)}\n")
-  XSDebug(p"Data:  | src1:data | src2:data | src3:data |hit|pdest:rf:fp| roqIdx | pc | pred| predData | isShadow\n")
+    p" src2:${Hexadecimal(io.deq.bits.src2)} src3:${Hexadecimal(io.deq.bits.src3)} \n")
+  XSDebug(p"Data:  | src1:data | src2:data | src3:data |hit|pdest:rf:fp| roqIdx | pc | \n")
   for(i <- data.indices) {
     XSDebug(p"${i.U}:|${uop(i).psrc1}:${Hexadecimal(data(i)(0))}|${uop(i).psrc2}:" +
       p"${Hexadecimal(data(i)(1))}|${uop(i).psrc3}:${Hexadecimal(data(i)(2))}|" +
       p"${Binary(io.ctrl.srcUpdate(i).asUInt)}|${uop(i).pdest}:${uop(i).ctrl.rfWen}:" +
-      p"${uop(i).ctrl.fpWen}|${uop(i).roqIdx} |${Hexadecimal(uop(i).cf.pc)}" +
-      p"${uop(i).ppred} | ${uop(i).predData} |  ${uop(i).is_sfb_shadow}\n")
+      p"${uop(i).ctrl.fpWen}|${uop(i).roqIdx} |${Hexadecimal(uop(i).cf.pc)}\n") 
   }
 }

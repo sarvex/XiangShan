@@ -485,49 +485,53 @@ class IFU extends XSModule with HasIFUConst
 
   // predTaken Vec
   fetchPacketWire.predTaken := if4_bp.taken
+  
   //sfb process
+  if(EnableSFB){
+    val pd_sfb_vec = if4_pd.sfbVec
+    val pd_shadowable_vec = if4_pd.shadowableVec
+    val pd_range_mask = if4_pd.rangeMask
+    val shadowMask = VecInit((0 until PredictWidth).map{ i => ( !(if4_ipf ) &&   //exception
+                                                                (pd_shadowable_vec(i) || !if4_pd.mask(i))   //only valid but can not be shadowed instruction is 0
+                                                            )})
 
-  val pd_sfb_vec = if4_pd.sfbVec
-  val pd_shadowable_vec = if4_pd.shadowableVec
-  val pd_range_mask = if4_pd.rangeMask
-  val shadowMask = VecInit((0 until PredictWidth).map{ i => ( !(if4_ipf ) &&   //exception
-                                                              (pd_shadowable_vec(i) || !if4_pd.mask(i))   //only valid but can not be shadowed instruction is 0
-                                                           )})
+    val sfb_pk_check = VecInit((0 until PredictWidth) map { i =>
+      shadowMask.asUInt |
+      ~pd_range_mask(i).asUInt
+    })
 
-  val sfb_pk_check = VecInit((0 until PredictWidth) map { i =>
-     shadowMask.asUInt |
-     ~pd_range_mask(i).asUInt
-  })
+    val if4_sfb_vec = VecInit((0 until PredictWidth).map{  i =>
+      EnableSFB.B &&
+      ((~sfb_pk_check(i) === 0.U) &&
+      pd_sfb_vec(i) &&
+      if4_valid
+      )
+    })
 
-  val if4_sfb_vec = VecInit((0 until PredictWidth).map{  i =>
-    EnableSFB.B &&
-    ((~sfb_pk_check(i) === 0.U) &&
-     pd_sfb_vec(i) &&
-     if4_valid
-    )
-  })
+    //this fetch packet has sfb
+    val if4_sfb_enable = if4_sfb_vec.reduce(_||_)
+    //sfb index in the fetch packet (0-15)
+    val if4_sfb_idx    = PriorityEncoder(if4_sfb_vec)
+    //sfb range mask
+    //e.g:   if 2 is sfb and the target is 7
+    //       the mask is:    0000_0000_0111_1000
+    val if4_sfb_mask   = pd_range_mask(if4_sfb_idx) & fetchPacketWire.mask
 
-  //this fetch packet has sfb
-  val if4_sfb_enable = if4_sfb_vec.reduce(_||_)
-  //sfb index in the fetch packet (0-15)
-  val if4_sfb_idx    = PriorityEncoder(if4_sfb_vec)
-  //sfb range mask
-  //e.g:   if 2 is sfb and the target is 7
-  //       the mask is:    0000_0000_0111_1000
-  val if4_sfb_mask   = pd_range_mask(if4_sfb_idx) & fetchPacketWire.mask
-
+    //SFB signals
+    (0 until PredictWidth).map { i =>
+      fetchPacketWire.is_sfb_br(i) := if4_sfb_vec(i)
+      fetchPacketWire.is_sfb_shadow(i) := if4_sfb_enable && if4_sfb_mask(i)
+    }
+  } else {
+    (0 until PredictWidth).map { i =>
+      fetchPacketWire.is_sfb_br(i) := DontCare
+      fetchPacketWire.is_sfb_shadow(i) := DontCare
+    }
+  }
+  
   io.fetchPacket.bits := fetchPacketWire
   io.fetchPacket.valid := fetchPacketValid
 
-  //SFB signals
-  (0 until PredictWidth).map { i =>
-    fetchPacketWire.is_sfb_br(i) := if4_sfb_vec(i)
-    fetchPacketWire.is_sfb_shadow(i) := if4_sfb_enable && if4_sfb_mask(i)
-  }
-
-  if(EnableSFB && !env.FPGAPlatform){
-    ExcitingUtils.addSource( if4_sfb_enable.asBool && io.fetchPacket.fire(), "shortFowardBranchValid", Perf)
-  }
 
   // debug info
   if (IFUDebug) {

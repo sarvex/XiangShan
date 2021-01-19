@@ -113,10 +113,15 @@ class CtrlBlock extends XSModule with HasCircularQueuePtrHelper {
   dispatch.io.allocPregs.zipWithIndex.foreach { case (preg, i) =>
     intBusyTable.io.allocPregs(i).valid := preg.isInt
     fpBusyTable.io.allocPregs(i).valid := preg.isFp
-    predBusyTable.io.allocPregs(i).valid := preg.isShadow
     intBusyTable.io.allocPregs(i).bits := preg.preg
     fpBusyTable.io.allocPregs(i).bits := preg.preg
-    predBusyTable.io.allocPregs(i).bits := preg.ppred
+    if(EnableSFB){
+      predBusyTable.io.allocPregs(i).bits := preg.ppred
+      predBusyTable.io.allocPregs(i).valid := preg.isShadow
+    } else {
+      predBusyTable.io.allocPregs(i).bits := DontCare
+      predBusyTable.io.allocPregs(i).valid := DontCare
+    }
   }
   dispatch.io.numExist <> io.fromIntBlock.numExist ++ io.fromFpBlock.numExist ++ io.fromLsBlock.numExist
   dispatch.io.enqIQCtrl <> io.toIntBlock.enqIqCtrl ++ io.toFpBlock.enqIqCtrl ++ io.toLsBlock.enqIqCtrl
@@ -126,7 +131,6 @@ class CtrlBlock extends XSModule with HasCircularQueuePtrHelper {
   val flush = redirectValid && RedirectLevel.isUnconditional(redirect.level)
   fpBusyTable.io.flush := flush
   intBusyTable.io.flush := flush
-  predBusyTable.io.flush := flush
   for((wb, setPhyRegRdy) <- io.fromIntBlock.wbRegs.zip(intBusyTable.io.wbPregs)){
     setPhyRegRdy.valid := wb.valid && wb.bits.uop.ctrl.rfWen && (wb.bits.uop.ctrl.ldest =/= 0.U)
     setPhyRegRdy.bits := wb.bits.uop.pdest
@@ -135,16 +139,27 @@ class CtrlBlock extends XSModule with HasCircularQueuePtrHelper {
     setPhyRegRdy.valid := wb.valid && wb.bits.uop.ctrl.fpWen
     setPhyRegRdy.bits := wb.bits.uop.pdest
   }
-  for((wb, setPhyRegRdy) <- io.fromIntBlock.wbRegs.zip(predBusyTable.io.wbPregs)){
-    setPhyRegRdy.valid := wb.valid && wb.bits.uop.is_sfb_br
-    setPhyRegRdy.bits := wb.bits.uop.ppred
-  }
+
   intBusyTable.io.rfReadAddr <> dispatch.io.readIntRf.map(_.addr)
   intBusyTable.io.pregRdy <> dispatch.io.intPregRdy
   fpBusyTable.io.rfReadAddr <> dispatch.io.readFpRf.map(_.addr)
   fpBusyTable.io.pregRdy <> dispatch.io.fpPregRdy
-  predBusyTable.io.rfReadAddr <> dispatch.io.readPdRf.map(_.addr)
-  predBusyTable.io.pregRdy <> dispatch.io.pdPregRdy
+
+  if(EnableSFB){
+    predBusyTable.io.rfReadAddr <> dispatch.io.readPdRf.map(_.addr)
+    predBusyTable.io.pregRdy <> dispatch.io.pdPregRdy
+    predBusyTable.io.flush := flush
+    for((wb, setPhyRegRdy) <- io.fromIntBlock.wbRegs.zip(predBusyTable.io.wbPregs)){
+      setPhyRegRdy.valid := wb.valid && wb.bits.uop.is_sfb_br
+      setPhyRegRdy.bits := wb.bits.uop.ppred
+    }
+  } else {
+    dispatch.io.pdPregRdy <> DontCare
+    predBusyTable.io.rfReadAddr <> DontCare
+    predBusyTable.io.pregRdy <> DontCare
+    predBusyTable.io.flush := DontCare
+    predBusyTable.io.wbPregs <> DontCare
+  }
 
   roq.io.redirect.valid := brq.io.redirectOut.valid || io.fromLsBlock.replay.valid
   roq.io.redirect.bits <> redirectArb

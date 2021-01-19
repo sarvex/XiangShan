@@ -98,8 +98,13 @@ class Ibuffer extends XSModule with HasCircularQueuePtrHelper {
         inWire.ipf := io.in.bits.ipf
         inWire.acf := io.in.bits.acf
         inWire.crossPageIPFFix := io.in.bits.crossPageIPFFix
-        inWire.is_sfb_br := io.in.bits.is_sfb_br(i)
-        inWire.is_sfb_shadow := io.in.bits.is_sfb_shadow(i)
+        if(EnableSFB){
+          inWire.is_sfb_br := io.in.bits.is_sfb_br(i)
+          inWire.is_sfb_shadow := io.in.bits.is_sfb_shadow(i)
+        } else {
+          inWire.is_sfb_br := DontCare
+          inWire.is_sfb_shadow := DontCare
+        }
         ibuf(tail_vec(offset(i)).value) := inWire
       }
     }
@@ -129,8 +134,13 @@ class Ibuffer extends XSModule with HasCircularQueuePtrHelper {
       io.out(i).bits.brUpdate.pd := outWire.pd
       io.out(i).bits.brUpdate.bpuMeta := outWire.brInfo
       io.out(i).bits.crossPageIPFFix := outWire.crossPageIPFFix
-      io.out(i).bits.is_sfb_br := outWire.is_sfb_br
-      io.out(i).bits.is_sfb_shadow := outWire.is_sfb_shadow
+      if(EnableSFB){
+        io.out(i).bits.is_sfb_br := outWire.is_sfb_br
+        io.out(i).bits.is_sfb_shadow := outWire.is_sfb_shadow
+      } else {
+        io.out(i).bits.is_sfb_br := DontCare
+        io.out(i).bits.is_sfb_shadow := DontCare
+      }
     }
     head_ptr := head_ptr + PopCount(io.out.map(_.fire))
   }.otherwise {

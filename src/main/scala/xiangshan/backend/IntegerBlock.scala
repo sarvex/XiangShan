@@ -99,7 +99,7 @@ class IntegerBlock
     len = XLEN
   ))
 
-  val predRf = Module(new PredRegfile)
+
 
   val aluExeUnits = Array.tabulate(exuParameters.AluCnt)(_ => Module(new AluExeUnit))
   val jmpExeUnit = Module(new JumpExeUnit)
@@ -211,7 +211,6 @@ class IntegerBlock
 
   // read int rf from ctrl block
   intRf.io.readPorts <> io.fromCtrlBlock.readRf
-  predRf.io.readPorts <> io.fromCtrlBlock.readPd
   // write int rf arbiter
   val intWbArbiter = Module(new Wb(
     (exeUnits.map(_.config) ++ fastWakeUpIn ++ slowWakeUpIn).map(_.wbIntPriority),
@@ -229,10 +228,17 @@ class IntegerBlock
       rf.data := wb.bits.data
   }
 
-  predRf.io.writePorts.zip(intWbArbiter.io.out).foreach{
-    case (rf, wb) =>
-      rf.wen := wb.valid && wb.bits.uop.is_sfb_br
-      rf.addr := wb.bits.uop.pdest
-      rf.data := wb.bits.data(0).asBool
+  if(EnableSFB) {
+    val predRf = Module(new PredRegfile)
+    predRf.io.readPorts <> io.fromCtrlBlock.readPd
+    predRf.io.writePorts.zip(intWbArbiter.io.out).foreach{
+      case (rf, wb) =>
+        rf.wen := wb.valid && wb.bits.uop.is_sfb_br
+        rf.addr := wb.bits.uop.pdest
+        rf.data := wb.bits.data(0).asBool
+    }
+  } else {
+    io.fromCtrlBlock.readPd <> DontCare
   }
+
 }

@@ -183,8 +183,13 @@ class Dispatch1 extends XSModule {
     io.allocPregs(i).preg  := io.fromRename(i).bits.pdest
 
     //SFB signals
-    io.allocPregs(i).isShadow := io.fromRename(i).valid && io.fromRename(i).bits.is_sfb_shadow
-    io.allocPregs(i).ppred := io.fromRename(i).bits.ppred
+    if(EnableSFB){
+      io.allocPregs(i).isShadow := io.fromRename(i).valid && io.fromRename(i).bits.is_sfb_shadow
+      io.allocPregs(i).ppred := io.fromRename(i).bits.ppred
+    } else {
+      io.allocPregs(i).isShadow := DontCare
+      io.allocPregs(i).ppred := DontCare
+    }
   }
   val renameFireCnt = PopCount(io.recv)
   val enqFireCnt = PopCount(io.toIntDq.req.map(_.valid && io.toIntDq.canAccept)) +
