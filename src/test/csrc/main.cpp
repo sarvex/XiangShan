@@ -2,8 +2,11 @@
 #include <locale.h>
 #include <csignal>
 #include "emu.h"
+#include "remote_bitbang.h"
 
 static char mybuf[BUFSIZ];
+
+extern remote_bitbang_t * jtag;
 
 // junk, link for verilator
 std::function<double()> get_sc_time_stamp = []() -> double { return 0; };

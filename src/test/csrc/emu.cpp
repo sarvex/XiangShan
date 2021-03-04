@@ -8,6 +8,9 @@
 #include "ram.h"
 #include "zlib.h"
 #include "compress.h"
+#include "remote_bitbang.h"
+
+extern remote_bitbang_t * jtag;
 
 static inline void print_help(const char *file) {
   printf("Usage: %s [OPTION...]\n", file);
@@ -83,6 +86,8 @@ Emulator::Emulator(int argc, const char *argv[]):
   cycles(0), trapCode(STATE_RUNNING)
 {
   args = parse_args(argc, argv);
+
+
 
   for (int i = 0; i < NumCore; i++) {
     hascommit[i] = 0;

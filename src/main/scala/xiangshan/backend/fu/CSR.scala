@@ -262,7 +262,7 @@ class CSR extends FunctionUnit with HasCSRConst
 
   // val singleStep = dcsrOld.step && !debugMode
   // reg_singleStepped := false.B // && input single_step
-  csrio.singleStep := false.B
+  csrio.singleStep := dcsrData.step
 
   // Machine-Level CSRs
 
