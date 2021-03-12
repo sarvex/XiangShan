@@ -18,6 +18,8 @@ import devices.debug.{TLDebugModule, DebugIO, ResetCtrlIO, SystemJTAGIO, DebugTr
 import freechips.rocketchip.jtag.JTAGIO
 import chisel3.experimental.{IntParam, noPrefix}
 
+import utils._
+
 case class SoCParameters
 (
   NumCores: Integer = 1,

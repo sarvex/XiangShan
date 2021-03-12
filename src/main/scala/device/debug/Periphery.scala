@@ -16,6 +16,8 @@ import freechips.rocketchip.util._
 import freechips.rocketchip.prci.{ClockSinkParameters, ClockSinkNode}
 import freechips.rocketchip.tilelink._
 
+import utils._
+
 /** Protocols used for communicating with external debugging tools */
 sealed trait DebugExportProtocol
 case object DMI extends DebugExportProtocol
@@ -225,7 +227,7 @@ class SimJTAG(tickDelay: Int = 50) extends BlackBox(Map("TICK_DELAY" -> IntParam
     io.clock := tbclock
     io.reset := tbreset
 
-    io.enable    := PlusArg("jtag_rbb_enable", 0, "Enable SimJTAG for JTAG Connections. Simulation will pause until connection is made.")
+    io.enable    := true.B
     io.init_done := init_done
 
     // Success is determined by the gdbserver
@@ -237,10 +239,10 @@ class SimJTAG(tickDelay: Int = 50) extends BlackBox(Map("TICK_DELAY" -> IntParam
     }
   }
 
-  addResource("/vsrc/SimJTAG.v")
-  addResource("/csrc/SimJTAG.cc")
-  addResource("/csrc/remote_bitbang.h")
-  addResource("/csrc/remote_bitbang.cc")
+  //addResource("/vsrc/SimJTAG.v")
+  //addResource("/csrc/SimJTAG.cc")
+  //addResource("/csrc/remote_bitbang.h")
+  //addResource("/csrc/remote_bitbang.cc")
 }
 
 object OuterDebug {
@@ -262,6 +264,7 @@ object OuterDebug {
       debug.clockeddmi.foreach { d =>
         val dtm = Module(new SimDTM).connect(c, r, d, out)
       }
+      
       debug.systemjtag.foreach { sj =>
         val jtag = Module(new SimJTAG(tickDelay=3)).connect(sj.jtag, c, r, ~r, out)
         sj.reset := r//.asAsyncReset

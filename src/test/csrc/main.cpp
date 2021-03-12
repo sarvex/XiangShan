@@ -13,6 +13,12 @@ std::function<double()> get_sc_time_stamp = []() -> double { return 0; };
 double sc_time_stamp() { return get_sc_time_stamp(); }
 
 int main(int argc, const char** argv) {
+  printf("\033[1;32mExternal Debug: Test\n\033[0m");
+
+  jtag = new remote_bitbang_t(2021);
+
+  printf("\033[1;32mExternal Debug: Test\n\033[0m");
+
   printf("Emu compiled at %s, %s\n", __DATE__, __TIME__);
 
   setbuf(stderr, mybuf);

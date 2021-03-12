@@ -11,6 +11,8 @@ import freechips.rocketchip.config._
 import freechips.rocketchip.jtag._
 import freechips.rocketchip.util.property._
 
+import utils._
+
 
 case class JtagDTMConfig (
   idcodeVersion    : Int,      // chosen by manuf.
