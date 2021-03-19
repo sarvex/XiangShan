@@ -177,7 +177,7 @@ class CSR extends FunctionUnit with HasCSRConst
     io.in.bits.src(0),
     io.in.bits.uop.ctrl.imm,
     io.in.bits.uop.ctrl.fuOpType
-  )
+)
 
   // CSR define
 
@@ -238,10 +238,10 @@ class CSR extends FunctionUnit with HasCSRConst
   }
 
   class Interrupt extends Bundle {
+    val d = Output(Bool())
     val e = new Priv
     val t = new Priv
     val s = new Priv
-    val d = Output(Bool())
   }
 
   // Debug CSRs
@@ -251,6 +251,8 @@ class CSR extends FunctionUnit with HasCSRConst
   val dpc = Reg(UInt(64.W))
   val dscratch = Reg(UInt(64.W))
 
+  debugMode := debugMode
+
   val dcsrData = WireInit(dcsr.asTypeOf(new DcsrStruct))
 
   def dcsrUpdateSideEffect(dcsr: UInt): UInt = {
@@ -258,7 +260,11 @@ class CSR extends FunctionUnit with HasCSRConst
     val dcsrNew = dcsr | (dcsrOld.prv(0) | dcsrOld.prv(1)).asUInt // turn 10 priv into 11
     dcsrNew
   }
-   XSDebug(csrio.externalInterrupt.debug_int, "DebugInt is 1")
+  // def mieDebugModeSideEffect(mie: UInt): UInt = {
+  //   mie | "h1000".U // always enable debug interrupt
+  // }
+  // XSDebug(csrio.externalInterrupt.debug_int, "External Debug: DebugInt is asserted\n")
+  XSDebug(debugMode, "Debug Mode: Hart is in debug mode! \n")
 
   // val singleStep = dcsrOld.step && !debugMode
   // reg_singleStepped := false.B // && input single_step
@@ -697,11 +703,13 @@ class CSR extends FunctionUnit with HasCSRConst
     val mstatusOld = WireInit(mstatus.asTypeOf(new MstatusStruct))
     val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
     val dcsrNew = WireInit(dcsr.asTypeOf(new DcsrStruct))
+    val debugModeNew = WireInit(debugMode)
     mstatusNew.mprv := 0.U
     mstatus := mstatusNew.asUInt
     priviledgeMode := dcsrNew.prv
     retTarget := dpc(VAddrBits-1, 0)
-    debugMode := false.B
+    debugModeNew := false.B
+    debugMode := debugModeNew
   }
 
   when (valid && isMret) {
@@ -765,9 +773,10 @@ class CSR extends FunctionUnit with HasCSRConst
     ((priviledgeMode === ModeM) && mstatusStruct.ie.m) || (priviledgeMode < ModeM))
 
   // send interrupt information to ROQ
-  val intrVecEnable = Wire(Vec(13, Bool()))
+  val intrVecEnable = Wire(Vec(12, Bool()))
   intrVecEnable.zip(ideleg.asBools).map{case(x,y) => x := priviledgedEnableDetect(y)}
-  val intrVec = mie(12,0) & mip.asUInt & intrVecEnable.asUInt
+  val debugIntEnable = true.B
+  val intrVec = Cat(1.U, mie(11,0)) & mip.asUInt & Cat(debugIntEnable, intrVecEnable.asTypeOf(UInt(12.W))) // Debug int always enabled
   val intrBitSet = intrVec.orR()
   csrio.interrupt := intrBitSet
   mipWire.t.m := csrio.externalInterrupt.mtip
@@ -775,12 +784,14 @@ class CSR extends FunctionUnit with HasCSRConst
   mipWire.e.m := csrio.externalInterrupt.meip
   mipWire.d   := csrio.externalInterrupt.debug_int
 
+  // XSDebug(mipWire.d, "Debug Mode: mip wire debug bit is asserted!\n")
+
   // interrupts
   val intrNO = IntPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(intrVec(i), i.U, sum))
   val raiseIntr = csrio.exception.valid && csrio.exception.bits.isInterrupt
   XSDebug(raiseIntr, "interrupt: pc=0x%x, %d\n", csrio.exception.bits.uop.cf.pc, intrNO)
 
-  val debugIntr = intrNO === IRQ_DEBUG.U
+  val debugIntr = intrNO === IRQ_DEBUG.U && raiseIntr
 
   // exceptions
   val raiseException = csrio.exception.valid && !csrio.exception.bits.isInterrupt
@@ -798,7 +809,9 @@ class CSR extends FunctionUnit with HasCSRConst
   val exceptionNO = ExcPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(raiseExceptionVec(i), i.U, sum))
   val causeNO = (raiseIntr << (XLEN-1)).asUInt() | Mux(raiseIntr, intrNO, exceptionNO)
 
+  // val debugIntr = csrio.exception.bits.uop.cf.exceptionVec(breakPoint) && raiseIntr
   val debugExceptionIntr = hasbreakPoint || debugIntr //TODO: singlestep
+
 
   val raiseExceptionIntr = csrio.exception.valid // also not in debug mode
   XSDebug(raiseExceptionIntr, "int/exc: pc %x int (%d):%x exc: (%d):%x\n",
@@ -836,7 +849,10 @@ class CSR extends FunctionUnit with HasCSRConst
     mtval := memExceptionAddr
   }
 
-  val debugTrapTarget = Mux(hasbreakPoint, 0x808.U, 0x800.U)
+  val debugTrapTarget = Mux(!csrio.externalInterrupt.debug_int, 0x808.U, 0x800.U) //TODO: change to breakpoint
+
+  // XSDebug(debugExceptionIntr, "Debug Mode: Trap to %x\n", debugTrapTarget)
+  XSDebug(hasbreakPoint, "Debug Mode: breakpoint\n")
 
   val deleg = Mux(raiseIntr, mideleg , medeleg)
   // val delegS = ((deleg & (1 << (causeNO & 0xf))) != 0) && (priviledgeMode < ModeM);
@@ -854,29 +870,34 @@ class CSR extends FunctionUnit with HasCSRConst
     retTargetReg := retTarget
   }
   csrio.isXRet := isXRetFlag
-  csrio.trapTarget := Mux(debugExceptionIntr, debugTrapTarget, 
+  csrio.trapTarget := Mux(csrio.externalInterrupt.debug_int, debugTrapTarget, 
     Mux(isXRetFlag,
       retTargetReg,
       Mux(delegS, stvec, mtvec)(VAddrBits-1, 0)
     )
   )
 
+  XSDebug(intrBitSet, "Debug Mode: intrBitSet is asserted! isXret is %x, trapTarget is %x\n", isXRet.asUInt, csrio.trapTarget)
+  XSDebug(debugExceptionIntr, "Debug Mode: debugExceptionIntr\n")
+
   when (raiseExceptionIntr) {
     val mstatusOld = WireInit(mstatus.asTypeOf(new MstatusStruct))
     val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
     val dcsrNew = WireInit(dcsr.asTypeOf(new DcsrStruct))
+    val debugModeNew = WireInit(debugMode)
 
     when (debugExceptionIntr) {
       when (debugIntr) {
-        debugMode := true.B
-        priviledgeMode := ModeM
+        debugModeNew := true.B 
         mstatusNew.mprv := false.B
         dpc := SignExt(csrio.exception.bits.uop.cf.pc, XLEN)
         dcsrNew.cause := 1.U
         dcsrNew.prv := priviledgeMode
-      } .elsewhen (!debugMode) {
+        priviledgeMode := ModeM
+        XSDebug(debugIntr, "Trap to %x\n", debugTrapTarget)
+      } .elsewhen (hasbreakPoint) {
         // ebreak in running hart
-        debugMode := true.B
+        debugModeNew := true.B
         dpc := SignExt(csrio.exception.bits.uop.cf.pc, XLEN)
         dcsrNew.cause := 3.U
         dcsrNew.prv := priviledgeMode // TODO
@@ -903,6 +924,7 @@ class CSR extends FunctionUnit with HasCSRConst
     }
 
     mstatus := mstatusNew.asUInt
+    debugMode := debugModeNew
   }
 
   XSDebug(raiseExceptionIntr && delegS, "sepc is writen!!! pc:%x\n", cfIn.pc)

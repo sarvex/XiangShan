@@ -437,6 +437,8 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
   io.exception.bits.uop.cf.crossPageIPFFix := RegEnable(deqDispatchData.crossPageIPFFix, exceptionHappen)
   io.exception.bits.isInterrupt := RegEnable(intrEnable, exceptionHappen)
 
+  XSDebug(intrEnable, "Debug Mode: intrEnable asserted! exception happen is %d State is s_idle? %x, deqPtr.value %x\n", exceptionHappen, (state === s_idle), valid(deqPtr.value))
+
   XSDebug(io.flushOut.valid,
     p"generate redirect: pc 0x${Hexadecimal(io.exception.bits.uop.cf.pc)} intr $intrEnable " +
     p"excp $exceptionEnable flushPipe $isFlushPipe " +

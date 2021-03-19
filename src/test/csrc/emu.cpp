@@ -638,7 +638,7 @@ uint64_t Emulator::execute(uint64_t max_cycle, uint64_t max_instr) {
 #else
       int core_nr_commit = dut_ptr->io_difftest_commit;
 #endif
-      if (core_nr_commit && hascommit[i]) {
+      if (core_nr_commit && hascommit[i]) {/*
         if (i == 0) {
           read_emu_regs(reg[i]);
           read_wb_info(wpc[i], wdata[i], wdst[i], lpaddr[i], ltype[i], lfu[i]);
@@ -655,7 +655,7 @@ uint64_t Emulator::execute(uint64_t max_cycle, uint64_t max_instr) {
 
         if (difftest_step(&diff[i], i)) {
           trapCode = STATE_ABORT;
-        }
+        }*/
         lastcommit[i] = max_cycle;
 
         // update instr_cnt
@@ -664,7 +664,7 @@ uint64_t Emulator::execute(uint64_t max_cycle, uint64_t max_instr) {
       }
 
 #ifdef DIFFTEST_STORE_COMMIT
-      for (int core = 0; core < NumCore; core++) {
+      /*for (int core = 0; core < NumCore; core++) {
 #ifdef DUALCORE
         int storeCommit = (core == 0) ? dut_ptr->io_difftest_storeCommit : dut_ptr->io_difftest2_storeCommit;
 #else
@@ -688,12 +688,12 @@ uint64_t Emulator::execute(uint64_t max_cycle, uint64_t max_instr) {
             }
           }
         }
-      }
+      }*/
 #endif
     }
 
     // Update Golden Memory info
-    if (dut_ptr->io_difftest_sbufferResp) {
+    /*if (dut_ptr->io_difftest_sbufferResp) {
       read_sbuffer_info(sbufferData);
       uint64_t sbufferAddr = dut_ptr->io_difftest_sbufferAddr;
       uint64_t sbufferMask = dut_ptr->io_difftest_sbufferMask;
@@ -724,7 +724,7 @@ uint64_t Emulator::execute(uint64_t max_cycle, uint64_t max_instr) {
       uint64_t  atomicOut  =  dut_ptr->io_difftest2_atomicOut;
       handle_atomic(atomicAddr, atomicData, atomicMask, atomicFuop, atomicOut);
     }
-#endif
+#endif*/
 
     uint32_t t = uptime();
     if (t - lasttime_poll > 100) {

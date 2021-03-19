@@ -22,6 +22,8 @@ import freechips.rocketchip.diplomaticobjectmodel.logicaltree.DebugLogicalTreeNo
 import freechips.rocketchip.amba.apb.{APBToTL, APBFanout}
 import freechips.rocketchip.util.BooleanToAugmentedBoolean
 
+import utils._
+
 object DsbBusConsts {
   def sbAddrWidth = 12
   def sbIdWidth   = 10 
@@ -578,13 +580,13 @@ class TLDebugModuleOuter(device: Device)(implicit p: Parameters) extends LazyMod
       io.debug_int(component) := debugIntRegs(component) | io.hgDebugInt(component)
     }
 
+    // XSError(io.debug_int(0), "External Debug: Int line is asserted so DM is working fine?")
+
     // Halt request registers are set & cleared by writes to DMCONTROL.haltreq
     // resumereq also causes the core to execute a 'dret',
     // so resumereq is passed through to Inner.
     // hartsel/hasel/hamask must also be used by the DebugModule state machine,
     // so it is passed to Inner.
-
-    // TODO how long this int lasts?
 
     for (component <- 0 until nComponents) {
       when (~dmactive || ~dmAuthenticated) {
