@@ -193,7 +193,9 @@ class XSSoc()(implicit p: Parameters) extends LazyModule with HasSoCParameter {
       // xs_core(i).module.io.externalInterrupt.meip := RegNext(RegNext(io.meip(i)))
       xs_core(i).module.io.externalInterrupt.meip := plic.module.io.extra.get.meip(i)
       xs_core(i).module.io.externalInterrupt.debug_int := DM.module.io.debug_int(i)
-      l2prefetcher(i).module.io.enable := xs_core(i).module.io.l2_pf_enable
+
+      l2prefetcher(i).module.io.enable := RegNext(xs_core(i).module.io.l2_pf_enable)
+
       l2prefetcher(i).module.io.in <> l2cache(i).module.io
     }
 

@@ -180,7 +180,7 @@ class MicroBTB extends BasePredictor
     val read_resps = VecInit(banks.map(b => b.read_resp))
 
     for (b <- 0 until PredictWidth) {
-        banks(b).read_pc.valid := io.pc.valid && io.inMask(b)
+        banks(b).read_pc.valid := io.inMask(b)
         banks(b).read_pc.bits := io.pc.bits
         
         //only when hit and instruction valid and entry valid can output data
@@ -227,6 +227,15 @@ class MicroBTB extends BasePredictor
         banks(b).update_write_data.valid := data_write_valids(b)
         banks(b).update_write_data.bits := update_write_datas(b)
         banks(b).update_taken := update_takens(b)
+    }
+
+    if (!env.FPGAPlatform) {
+        XSPerf("ubtb_commit_hits",
+            PopCount((u.takens zip u.valids zip u.metas zip u.pd) map {
+                case (((t, v), m), pd)  => t && v && m.ubtbHit.asBool && !pd.notCFI && update_valid}))
+        XSPerf("ubtb_commit_misses",
+            PopCount((u.takens zip u.valids zip u.metas zip u.pd) map {
+                case (((t, v), m), pd)  => t && v && !m.ubtbHit.asBool && !pd.notCFI && update_valid}))
     }
     
     if (BPUDebug && debug) {

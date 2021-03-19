@@ -52,18 +52,11 @@ object ValidUndirectioned {
 }
 
 class SCMeta(val useSC: Boolean) extends XSBundle with HasSCParameter {
-  def maxVal = 8 * ((1 << TageCtrBits) - 1) + SCTableInfo.map { case (_, cb, _) => (1 << cb) - 1 }.reduce(_ + _)
-
-  def minVal = -(8 * (1 << TageCtrBits) + SCTableInfo.map { case (_, cb, _) => 1 << cb }.reduce(_ + _))
-
-  def sumCtrBits = max(log2Ceil(-minVal), log2Ceil(maxVal + 1)) + 1
-
   val tageTaken = if (useSC) Bool() else UInt(0.W)
   val scUsed = if (useSC) Bool() else UInt(0.W)
   val scPred = if (useSC) Bool() else UInt(0.W)
   // Suppose ctrbits of all tables are identical
   val ctrs = if (useSC) Vec(SCNTables, SInt(SCCtrBits.W)) else Vec(SCNTables, SInt(0.W))
-  val sumAbs = if (useSC) UInt(sumCtrBits.W) else UInt(0.W)
 }
 
 class TageMeta extends XSBundle with HasTageParameter {
@@ -121,6 +114,7 @@ class PredictorAnswer extends XSBundle {
 
 class BpuMeta extends XSBundle with HasBPUParameter {
   val btbWriteWay = UInt(log2Up(BtbWays).W)
+  val btbHit = Bool()
   val bimCtr = UInt(2.W)
   val tageMeta = new TageMeta
   // for global history
@@ -130,6 +124,8 @@ class BpuMeta extends XSBundle with HasBPUParameter {
   val debug_tage_cycle = if (EnableBPUTimeRecord) UInt(64.W) else UInt(0.W)
 
   val predictor = if (BPUDebug) UInt(log2Up(4).W) else UInt(0.W) // Mark which component this prediction comes from {ubtb, btb, tage, loopPredictor}
+
+  val ubtbHit = if (BPUDebug) UInt(1.W) else UInt(0.W)
 
   val ubtbAns = new PredictorAnswer
   val btbAns = new PredictorAnswer
@@ -201,7 +197,7 @@ class FtqEntry extends XSBundle {
   val specCnt = Vec(PredictWidth, UInt(10.W))
   val metas = Vec(PredictWidth, new BpuMeta)
 
-  val cfiIsCall, cfiIsRet, cfiIsRVC = Bool()
+  val cfiIsCall, cfiIsRet, cfiIsJalr, cfiIsRVC = Bool()
   val rvc_mask = Vec(PredictWidth, Bool())
   val br_mask = Vec(PredictWidth, Bool())
   val cfiIndex = ValidUndirectioned(UInt(log2Up(PredictWidth).W))
@@ -221,7 +217,7 @@ class FtqEntry extends XSBundle {
     p"ftqPC: ${Hexadecimal(ftqPC)} lastPacketPC: ${Hexadecimal(lastPacketPC.bits)} hasLastPrev:$hasLastPrev " +
       p"rasSp:$rasSp specCnt:$specCnt brmask:${Binary(Cat(br_mask))} rvcmask:${Binary(Cat(rvc_mask))} " +
       p"valids:${Binary(valids.asUInt())} cfi valid: ${cfiIndex.valid} " +
-      p"cfi index: ${cfiIndex.bits} isCall:$cfiIsCall isRet:$cfiIsRet isRvc:$cfiIsRVC " +
+      p"cfi index: ${cfiIndex.bits} isCall:$cfiIsCall isRet:$cfiIsRet isJalr:$cfiIsJalr, isRvc:$cfiIsRVC " +
       p"mispred:${Binary(Cat(mispred))} target:${Hexadecimal(target)}\n"
   }
 
@@ -264,6 +260,7 @@ class CtrlSignals extends XSBundle {
   val imm = UInt(ImmUnion.maxLen.W)
   val commitType = CommitType()
   val fpu = new FPUCtrlSignals
+  val isMove = Bool()
 
   def decode(inst: UInt, table: Iterable[(BitPat, List[BitPat])]) = {
     val decoder = freechips.rocketchip.rocket.DecodeLogic(inst, XDecode.decodeDefault, table)
@@ -282,6 +279,8 @@ class CfCtrl extends XSBundle {
 }
 
 class PerfDebugInfo extends XSBundle {
+  val src1MoveElim = Bool()
+  val src2MoveElim = Bool()
   // val fetchTime = UInt(64.W)
   val renameTime = UInt(64.W)
   val dispatchTime = UInt(64.W)
@@ -403,6 +402,7 @@ class RoqCommitIO extends XSBundle {
 class TlbFeedback extends XSBundle {
   val rsIdx = UInt(log2Up(IssQueSize).W)
   val hit = Bool()
+  val flushState = Bool()
 }
 
 class RSFeedback extends TlbFeedback
@@ -541,11 +541,16 @@ class CustomCSRCtrlIO extends XSBundle {
   // Prefetcher
   val l1plus_pf_enable = Output(Bool())
   val l2_pf_enable = Output(Bool())
+  // Labeled XiangShan
   val dsid = Output(UInt(8.W)) // TODO: DsidWidth as parameter
-  // Load violation predict
+  // Load violation predictor
   val lvpred_disable = Output(Bool())
   val no_spec_load = Output(Bool())
   val waittable_timeout = Output(UInt(5.W))
-  // Branch predicter
+  // Branch predictor
   val bp_ctrl = Output(new BPUCtrl)
+  // Memory Block
+  val sbuffer_threshold = Output(UInt(4.W))
+  // Rename
+  val move_elim_enable = Output(Bool())
 }

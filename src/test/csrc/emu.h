@@ -20,6 +20,7 @@ struct EmuArgs {
   uint64_t max_cycles;
   uint64_t max_instr;
   uint64_t warmup_instr;
+  uint64_t stat_cycles;
   uint64_t log_begin, log_end;
   const char *image;
   const char *snapshot_path;
@@ -31,6 +32,7 @@ struct EmuArgs {
     max_cycles = -1;
     max_instr = -1;
     warmup_instr = -1;
+    stat_cycles = -1;
     log_begin = 1;
     log_end = -1;
     snapshot_path = NULL;
@@ -80,7 +82,7 @@ class Emulator {
 
   inline void reset_ncycles(size_t cycles);
   inline void single_cycle();
-  void trigger_perfDump();
+  void trigger_stat_dump();
   void display_trapinfo();
   inline char* timestamp_filename(time_t t, char *buf);
   inline char* snapshot_filename(time_t t);
@@ -98,7 +100,9 @@ public:
   uint64_t execute(uint64_t max_cycle, uint64_t max_instr);
   uint64_t get_cycles() const { return cycles; }
   EmuArgs get_args() const { return args; }
-  bool is_good_trap() { return trapCode == STATE_GOODTRAP; };
+  bool is_good_trap() {
+    return trapCode == STATE_GOODTRAP || trapCode == STATE_LIMIT_EXCEEDED;
+  };
   int get_trapcode() { return trapCode; }  
 };
 
