@@ -15,6 +15,8 @@ import ExcitingUtils.Debug
 import devices.debug.SystemJTAGIO
 import devices.debug.{SimJTAG, DebugIO, OuterDebug}
 import freechips.rocketchip.util.AsyncResetReg
+import chipsalliance.rocketchip.config.Config
+import freechips.rocketchip.tile.XLen
 
 class DiffTestIO extends XSBundle {
   val r = Output(Vec(64, UInt(XLEN.W)))
@@ -310,7 +312,9 @@ object TestMain extends App {
   )
 
   val otherArgs = socArgs.filterNot(_ == "--disable-log").filterNot(_ == "--fpga-platform").filterNot(_ == "--dual-core")
-  implicit val p = config.Parameters.empty
+  implicit val p = new Config((_, _, _) => {
+    case XLen => 64
+  })
   // generate verilog
   XiangShanStage.execute(
     otherArgs,

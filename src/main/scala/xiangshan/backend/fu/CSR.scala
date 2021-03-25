@@ -785,14 +785,15 @@ class CSR extends FunctionUnit with HasCSRConst
   // send interrupt information to ROQ
   val intrVecEnable = Wire(Vec(12, Bool()))
   intrVecEnable.zip(ideleg.asBools).map{case(x,y) => x := priviledgedEnableDetect(y)}
-  val debugIntEnable = true.B
-  val intrVec = Cat(1.U, mie(11,0)) & mip.asUInt & Cat(debugIntEnable, intrVecEnable.asTypeOf(UInt(12.W))) // Debug int always enabled
+  val debugIntrDelayer = ShiftRegister(csrio.externalInterrupt.debug_int, 10)
+  val debugIntrEnable = !(csrio.externalInterrupt.debug_int && debugIntrDelayer)
+  val intrVec = Cat(1.U, mie(11,0)) & mip.asUInt & Cat(1.U, intrVecEnable.asTypeOf(UInt(12.W))) // Debug int always enabled
   val intrBitSet = intrVec.orR()
   csrio.interrupt := intrBitSet
   mipWire.t.m := csrio.externalInterrupt.mtip
   mipWire.s.m := csrio.externalInterrupt.msip
   mipWire.e.m := csrio.externalInterrupt.meip
-  mipWire.d   := csrio.externalInterrupt.debug_int
+  mipWire.d   := csrio.externalInterrupt.debug_int && debugIntrEnable
 
   // XSDebug(mipWire.d, "Debug Mode: mip wire debug bit is asserted!\n")
 
