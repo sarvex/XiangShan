@@ -263,7 +263,7 @@ class CSR extends FunctionUnit with HasCSRConst
   // def mieDebugModeSideEffect(mie: UInt): UInt = {
   //   mie | "h1000".U // always enable debug interrupt
   // }
-  // XSDebug(csrio.externalInterrupt.debug_int, "External Debug: DebugInt is asserted\n")
+  XSDebug(csrio.externalInterrupt.debug_int, "External Debug: DebugInt is asserted\n")
   XSDebug(debugMode, "Debug Mode: Hart is in debug mode! \n")
 
   // val singleStep = dcsrOld.step && !debugMode
@@ -762,10 +762,10 @@ class CSR extends FunctionUnit with HasCSRConst
   io.in.ready := true.B
   io.out.valid := valid
 
-  val ebreakEnterDebug = (priviledgeMode === ModeM && dcsrData.ebreakm) || (priviledgeMode === ModeS && dcsrData.ebreaks) || (priviledgeMode === ModeU && dcsrData.ebreaku)
+  val ebreakCauseException = (priviledgeMode === ModeM && dcsrData.ebreakm) || (priviledgeMode === ModeS && dcsrData.ebreaks) || (priviledgeMode === ModeU && dcsrData.ebreaku)
 
   val csrExceptionVec = WireInit(cfIn.exceptionVec)
-  csrExceptionVec(breakPoint) := io.in.valid && isEbreak && ebreakEnterDebug
+  csrExceptionVec(breakPoint) := io.in.valid && isEbreak && ebreakCauseException // Ebreak causes exception when executed in debugMode
   csrExceptionVec(ecallM) := priviledgeMode === ModeM && io.in.valid && isEcall
   csrExceptionVec(ecallS) := priviledgeMode === ModeS && io.in.valid && isEcall
   csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall
@@ -823,8 +823,8 @@ class CSR extends FunctionUnit with HasCSRConst
   // val debugIntr = csrio.exception.bits.uop.cf.exceptionVec(breakPoint) && raiseIntr
   val debugExceptionIntr = hasbreakPoint || debugIntr //TODO: singlestep
 
-
-  val raiseExceptionIntr = csrio.exception.valid // also not in debug mode
+  val ebreakEnterParkLoop = debugMode && hasbreakPoint
+  val raiseExceptionIntr = csrio.exception.valid && (!debugMode || ebreakEnterParkLoop)// also not in debug mode
   XSDebug(raiseExceptionIntr, "int/exc: pc %x int (%d):%x exc: (%d):%x\n",
     csrio.exception.bits.uop.cf.pc, intrNO, intrVec, exceptionNO, raiseExceptionVec.asUInt
   )
@@ -860,7 +860,8 @@ class CSR extends FunctionUnit with HasCSRConst
     mtval := memExceptionAddr
   }
 
-  val debugTrapTarget = Mux(!csrio.externalInterrupt.debug_int, 0x808.U, 0x800.U) //TODO: change to breakpoint
+  val debugTrapTarget = Mux(isEbreak && !debugMode, 0x808.U, 0x800.U) //TODO: change to breakpoint
+
 
   // XSDebug(debugExceptionIntr, "Debug Mode: Trap to %x\n", debugTrapTarget)
   XSDebug(hasbreakPoint, "Debug Mode: breakpoint\n")
@@ -869,7 +870,7 @@ class CSR extends FunctionUnit with HasCSRConst
   // val delegS = ((deleg & (1 << (causeNO & 0xf))) != 0) && (priviledgeMode < ModeM);
   val delegS = deleg(causeNO(3,0)) && (priviledgeMode < ModeM)
   val tvalWen = !(hasInstrPageFault || hasLoadPageFault || hasStorePageFault || hasLoadAddrMisaligned || hasStoreAddrMisaligned) || raiseIntr // TODO: need check
-  val isXRet = io.in.valid && func === CSROpType.jmp && !isEcall
+  val isXRet = io.in.valid && func === CSROpType.jmp && !isEcall && !ebreakEnterParkLoop // TODO: ebreak is unfortunately counted as xret
 
   // ctrl block will use theses later for flush
   val isXRetFlag = RegInit(false.B)
@@ -881,7 +882,7 @@ class CSR extends FunctionUnit with HasCSRConst
     retTargetReg := retTarget
   }
   csrio.isXRet := isXRetFlag
-  csrio.trapTarget := Mux(csrio.externalInterrupt.debug_int, debugTrapTarget, 
+  csrio.trapTarget := Mux(csrio.externalInterrupt.debug_int || isEbreak, debugTrapTarget, 
     Mux(isXRetFlag,
       retTargetReg,
       Mux(delegS, stvec, mtvec)(VAddrBits-1, 0)
@@ -906,7 +907,7 @@ class CSR extends FunctionUnit with HasCSRConst
         dcsrNew.prv := priviledgeMode
         priviledgeMode := ModeM
         XSDebug(debugIntr, "Trap to %x\n", debugTrapTarget)
-      } .elsewhen (hasbreakPoint) {
+      }.elsewhen (hasbreakPoint && !debugMode) {
         // ebreak in running hart
         debugModeNew := true.B
         dpc := SignExt(csrio.exception.bits.uop.cf.pc, XLEN)

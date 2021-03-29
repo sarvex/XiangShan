@@ -1433,6 +1433,8 @@ class TLDebugModuleInner(device: Device, getNComponents: () => Int, beatBytes: I
       s"HartSel to HartId Mapping is illegal for this Debug Implementation, because HartID must be < ${flags.size} for it to work.")
     flags(hartSelFuncs.hartSelToHartId(selectedHartReg)).go := goReg
 
+    XSDebug(goReg, "Debug Module: goReg is set\n")
+
     for (component <- 0 until nComponents) {
       val componentSel = WireInit(component.U)
       flags(hartSelFuncs.hartSelToHartId(componentSel)).resume := resumeReqRegs(component)
