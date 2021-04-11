@@ -714,7 +714,7 @@ class CSR extends FunctionUnit with HasCSRConst
     val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
     val dcsrNew = WireInit(dcsr.asTypeOf(new DcsrStruct))
     val debugModeNew = WireInit(debugMode)
-    mstatusNew.mprv := 0.U
+    when (dcsr.asTypeOf(new DcsrStruct).prv =/= ModeM) {mstatusNew.mprv := 0.U} //If the new privilege mode is less privileged than M-mode, MPRV in mstatus is cleared.
     mstatus := mstatusNew.asUInt
     priviledgeMode := dcsrNew.prv
     retTarget := dpc(VAddrBits-1, 0)
@@ -816,12 +816,14 @@ class CSR extends FunctionUnit with HasCSRConst
   val hasStoreAccessFault = csrio.exception.bits.uop.cf.exceptionVec(storeAccessFault) && raiseException
   val hasbreakPoint = csrio.exception.bits.uop.cf.exceptionVec(breakPoint) && raiseException
 
+  val hasSingleStep = csrio.exception.bits.uop.ctrl.singleStep && raiseException
+
   val raiseExceptionVec = csrio.exception.bits.uop.cf.exceptionVec
   val exceptionNO = ExcPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(raiseExceptionVec(i), i.U, sum))
   val causeNO = (raiseIntr << (XLEN-1)).asUInt() | Mux(raiseIntr, intrNO, exceptionNO)
 
   // val debugIntr = csrio.exception.bits.uop.cf.exceptionVec(breakPoint) && raiseIntr
-  val debugExceptionIntr = hasbreakPoint || debugIntr //TODO: singlestep
+  val debugExceptionIntr = hasbreakPoint || debugIntr || hasSingleStep //TODO: singlestep
 
   val ebreakEnterParkLoop = debugMode && hasbreakPoint
   val raiseExceptionIntr = csrio.exception.valid && (!debugMode || ebreakEnterParkLoop)// also not in debug mode
@@ -907,11 +909,11 @@ class CSR extends FunctionUnit with HasCSRConst
         dcsrNew.prv := priviledgeMode
         priviledgeMode := ModeM
         XSDebug(debugIntr, "Trap to %x\n", debugTrapTarget)
-      }.elsewhen (hasbreakPoint && !debugMode) {
-        // ebreak in running hart
+      }.elsewhen ((hasbreakPoint || hasSingleStep) && !debugMode) {
+        // ebreak or ss in running hart
         debugModeNew := true.B
         dpc := SignExt(csrio.exception.bits.uop.cf.pc, XLEN)
-        dcsrNew.cause := 3.U
+        dcsrNew.cause := Mux(hasbreakPoint, 3.U, 0.U)
         dcsrNew.prv := priviledgeMode // TODO
         priviledgeMode := ModeM
         mstatusNew.mprv := false.B
