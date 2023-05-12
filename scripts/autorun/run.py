@@ -44,10 +44,10 @@ TaskSummary = {}
 
 noop_home = os.environ["NOOP_HOME"]
 exe = 'numactl'
-emu = noop_home + '/build/emu' # 仿真可执行文件的路径
+emu = f'{noop_home}/build/emu'
 # 使用者可以选择性修改以下写死的参数
 data_dir = '/bigdata/ccc_data/gcpt_shared/random_cpts' # `checkpoint` 目录，比如左边这个路径
-top_output_dir = noop_home + '/scripts/autorun/' # 结果输出目录（默认为该文件目录，建议使用者修改）
+top_output_dir = f'{noop_home}/scripts/autorun/'
 THREADS_NUM = 8 # 每个 `emu` 任务运行时将会所占的 `cpu` 核数，一般和编译 `emu` 时设置的线程数一致
 MAX_CORE = 128 # 所有 `emu` 任务占用的最大 `cpu` 核数，因此可以同时运行 `MAX_CORE / THREADS_NUM` 个 `emu` 任务
 MAX_INSTR = 1000000 # 每个 `emu` 任务运行的最大指令数
@@ -74,7 +74,7 @@ def find_task(d: str):
 def task_wrapper(task: SimulatorTaskGoBack, thread_num: int, cores_id: int, cores):
     core_options = [
         '-C',
-        str(cores_id * thread_num) + '-' + str(cores_id * thread_num + thread_num - 1)
+        f'{str(cores_id * thread_num)}-{str(cores_id * thread_num + thread_num - 1)}',
     ]
     task.insert_direct_options(core_options, 0)
     is_goback = False

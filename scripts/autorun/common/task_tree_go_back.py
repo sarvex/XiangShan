@@ -31,6 +31,16 @@ def task_tree_to_batch_task(
         exe: str, top_data_dir: str, batch_task_name: str, emu: str, max_instr: int):
     tasks = []
     for workload, cpts in batch_task_desc.items():
-        for cpt_id, cpt_file in cpts.items():
-            tasks.append(task(exe, top_data_dir, batch_task_name, workload, cpt_id, emu, max_instr))
+        tasks.extend(
+            task(
+                exe,
+                top_data_dir,
+                batch_task_name,
+                workload,
+                cpt_id,
+                emu,
+                max_instr,
+            )
+            for cpt_id, cpt_file in cpts.items()
+        )
     return tasks

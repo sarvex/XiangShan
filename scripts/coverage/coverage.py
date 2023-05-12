@@ -66,8 +66,8 @@ if __name__ == "__main__":
 
                 # remove line coverage results in systhesis block
                 if coverage_match:
-                    coverage_stat = coverage_match.group(1)
-                    line = line.replace(coverage_match.group(1), " " * len(coverage_stat))
+                    coverage_stat = coverage_match[1]
+                    line = line.replace(coverage_match[1], " " * len(coverage_stat))
 
             # enter reg_init block
             if reg_init_match:
@@ -83,8 +83,8 @@ if __name__ == "__main__":
 
                 # remove line coverage results in systhesis block
                 if coverage_match:
-                    coverage_stat = coverage_match.group(1)
-                    line = line.replace(coverage_match.group(1), " " * len(coverage_stat))
+                    coverage_stat = coverage_match[1]
+                    line = line.replace(coverage_match[1], " " * len(coverage_stat))
 
             # enter mem_init block
             if mem_init_match:
@@ -100,8 +100,8 @@ if __name__ == "__main__":
 
                 # remove line coverage results in systhesis block
                 if coverage_match:
-                    coverage_stat = coverage_match.group(1)
-                    line = line.replace(coverage_match.group(1), " " * len(coverage_stat))
+                    coverage_stat = coverage_match[1]
+                    line = line.replace(coverage_match[1], " " * len(coverage_stat))
 
             lines += line
 

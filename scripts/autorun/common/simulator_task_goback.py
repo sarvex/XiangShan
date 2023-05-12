@@ -27,7 +27,7 @@ class SimulatorTaskGoBack:
         # options passing to simulator
         self.direct_options = []
         # options passing to python parser
-        self.dict_options = dict()
+        self.dict_options = {}
         self.list_options = set()
         self.final_options = []
 
@@ -71,8 +71,7 @@ class SimulatorTaskGoBack:
     def format_options(self):
         self.final_options = self.direct_options
         self.final_options += list(self.list_options)
-        for k, v in self.dict_options.items():
-            self.final_options.append(f'{k}={v}')
+        self.final_options.extend(f'{k}={v}' for k, v in self.dict_options.items())
 
     def workload_level_path_format(self):
         self.log_dir = f'{self.top_data_dir}/{self.task_name}/{self.workload}/'
@@ -143,21 +142,20 @@ class SimulatorTaskGoBack:
         return 0
 
 def check_simulator(simulator_out_path: str):
-    file = open(simulator_out_path, 'r')
-    is_aborted = False
-    for line in file.readlines():
-        if line.find('cycleCnt') != -1:
-            words = line.split(' ')
-            cycle_cnt_index = 0
-            for word in words:
-                if word == 'cycleCnt':
-                    assert(len(words) >= cycle_cnt_index + 3)
-                    words = words[cycle_cnt_index + 2].split(',')
-                    assert(len(words) == 2)
-                    assert(words[1] == '')
-                    file.close()
-                    return int(words[0])
-                else:
-                    cycle_cnt_index += 1
-    file.close()
+    with open(simulator_out_path, 'r') as file:
+        is_aborted = False
+        for line in file.readlines():
+            if line.find('cycleCnt') != -1:
+                words = line.split(' ')
+                cycle_cnt_index = 0
+                for word in words:
+                    if word == 'cycleCnt':
+                        assert(len(words) >= cycle_cnt_index + 3)
+                        words = words[cycle_cnt_index + 2].split(',')
+                        assert(len(words) == 2)
+                        assert(words[1] == '')
+                        file.close()
+                        return int(words[0])
+                    else:
+                        cycle_cnt_index += 1
     return -1

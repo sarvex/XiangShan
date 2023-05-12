@@ -50,7 +50,7 @@ logLevels = ['ALL', 'DEBUG', 'INFO', 'WARN', 'ERROR']
 def listToStr(lst):
     acc = ''
     for l in lst:
-        acc += '|' + str(l) if acc else str(l)
+        acc += f'|{str(l)}' if acc else str(l)
     return acc
 
 def lineStrip(line):
@@ -69,9 +69,7 @@ def analyzeLog(filename):
     cmd = "grep -E '\[time=.*\]' {0} ".format(filename) + " | awk -F '(:)' {'print $1'} | awk  {'print $NF'} | sort | uniq"
     res = os.popen(cmd)
     modules = list(map(lineStrip, res.readlines()))
-    mymap = {}
-    for m in modules:
-        mymap[m] = getNumLogLines(filename, [m])
+    mymap = {m: getNumLogLines(filename, [m]) for m in modules}
     printMap(mymap)
 
 def main():

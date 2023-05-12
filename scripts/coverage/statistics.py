@@ -42,17 +42,13 @@ LINECOVERAGE = 0
 TOGGLECOVERAGE = 1
 
 def check_one_hot(l):
-    cnt = 0
-    for e in l:
-        if e:
-            cnt += 1
+    cnt = sum(1 for e in l if e)
     return cnt <= 1
 
 def get_lines(input_file):
     lines = []
     with open(input_file) as f:
-        for line in f:
-            lines.append(line)
+        lines.extend(iter(f))
     return lines
 
 def get_line_annotation(lines):
@@ -75,9 +71,7 @@ def get_line_annotation(lines):
     not_toggle_coverred_pattern_3 = re.compile('^\s*(%0+)\s+input')
     not_toggle_coverred_pattern_4 = re.compile('^\s*(%0+)\s+output')
 
-    line_cnt = 0
-
-    for line in lines:
+    for line_cnt, line in enumerate(lines):
         line_coverred_match = line_coverred_pattern_1.search(line) or line_coverred_pattern_2.search(line)
         not_line_coverred_match = not_line_coverred_pattern_1.search(line) or not_line_coverred_pattern_2.search(line)
 
@@ -107,7 +101,6 @@ def get_line_annotation(lines):
             line_annotations.append(NOT_TOGGLE_COVERRED)
         else:
             line_annotations.append(DONTCARE)
-        line_cnt += 1
     return line_annotations
 
 # get the line coverage statistics in line range [start, end)
@@ -148,27 +141,21 @@ def get_modules(lines):
     endmodule_pattern = re.compile("endmodule")
     submodule_pattern = re.compile("(\w+) (\w+) \( // @\[\w+.scala \d+:\d+\]")
 
-    line_count = 0
-
     name = "ModuleName"
 
-    for line in lines:
+    for line_count, line in enumerate(lines):
         module_match = module_pattern.search(line)
         endmodule_match = endmodule_pattern.search(line)
         submodule_match = submodule_pattern.search(line)
 
-        assert not (module_match and endmodule_match)
+        assert not module_match or not endmodule_match
 
         if module_match:
-            name = module_match.group(1)
+            name = module_match[1]
             # print("module_match: module: %s" % name)
             assert name not in modules
             # [begin
-            modules[name] = {}
-            modules[name][BEGIN] = line_count
-            # the first time we see a module, we treat as a root node
-            modules[name][TYPE] = ROOT
-
+            modules[name] = {BEGIN: line_count, TYPE: ROOT}
         if endmodule_match:
             # print("endmodule_match: module: %s" % name)
             assert name in modules
@@ -181,15 +168,14 @@ def get_modules(lines):
         if submodule_match:
             # submodule must be inside hierarchy
             assert name != "ModuleName"
-            submodule_type = submodule_match.group(1)
-            submodule_instance = submodule_match.group(2)
+            submodule_type = submodule_match[1]
             # print("submodule_match: type: %s instance: %s" % (submodule_type, submodule_instance))
 
             # submodules should be defined first
             # if we can not find it's definition
             # we consider it a black block module
             if submodule_type not in modules:
-                print("Module %s is a Blackbox" % submodule_type)
+                print(f"Module {submodule_type} is a Blackbox")
             else:
                 # mark submodule as a tree node
                 # it's no longer root any more
@@ -197,10 +183,10 @@ def get_modules(lines):
 
                 if CHILDREN not in modules[name]:
                     modules[name][CHILDREN] = []
+                submodule_instance = submodule_match[2]
                 submodule = {MODULE: submodule_type, INSTANCE: submodule_instance}
                 modules[name][CHILDREN].append(submodule)
 
-        line_count += 1
     return modules
 
 # we define two coverage metrics:

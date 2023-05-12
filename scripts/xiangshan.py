@@ -54,13 +54,12 @@ class XSArgs(object):
         self.numa = args.numa
 
     def get_env_variables(self):
-        all_env = {
-            "NOOP_HOME"    : self.noop_home,
-            "NEMU_HOME"    : self.nemu_home,
-            "AM_HOME"      : self.am_home,
-            "DRAMSIM3_HOME": self.dramsim3_home
+        return {
+            "NOOP_HOME": self.noop_home,
+            "NEMU_HOME": self.nemu_home,
+            "AM_HOME": self.am_home,
+            "DRAMSIM3_HOME": self.dramsim3_home,
         }
-        return all_env
 
     def get_chisel_args(self, prefix=None):
         chisel_args = [
@@ -78,15 +77,13 @@ class XSArgs(object):
             (self.with_dramsim3, "WITH_DRAMSIM3"),
             (self.trace, "EMU_TRACE")
         ]
-        args = filter(lambda arg: arg[0] is not None, makefile_args)
-        return args
+        return filter(lambda arg: arg[0] is not None, makefile_args)
 
     def get_emu_args(self):
         emu_args = [
             (self.max_instr, "max-instr")
         ]
-        args = filter(lambda arg: arg[0] is not None, emu_args)
-        return args
+        return filter(lambda arg: arg[0] is not None, emu_args)
 
     def show(self):
         print("Extra environment variables:")
@@ -142,16 +139,18 @@ class XiangShan(object):
         self.show()
         sim_args = " ".join(self.args.get_chisel_args(prefix="--"))
         make_args = " ".join(map(lambda arg: f"{arg[1]}={arg[0]}", self.args.get_makefile_args()))
-        return_code = self.__exec_cmd(f'make -C $NOOP_HOME verilog SIM_ARGS="{sim_args}" {make_args}')
-        return return_code
+        return self.__exec_cmd(
+            f'make -C $NOOP_HOME verilog SIM_ARGS="{sim_args}" {make_args}'
+        )
 
     def build_emu(self):
         print("Building XiangShan emu with the following configurations:")
         self.show()
         sim_args = " ".join(self.args.get_chisel_args(prefix="--"))
         make_args = " ".join(map(lambda arg: f"{arg[1]}={arg[0]}", self.args.get_makefile_args()))
-        return_code = self.__exec_cmd(f'make -C $NOOP_HOME ./build/emu -j200 SIM_ARGS="{sim_args}" {make_args}')
-        return return_code
+        return self.__exec_cmd(
+            f'make -C $NOOP_HOME ./build/emu -j200 SIM_ARGS="{sim_args}" {make_args}'
+        )
 
     def run_emu(self, workload):
         print("Running XiangShan emu with the following configurations:")
@@ -159,8 +158,9 @@ class XiangShan(object):
         emu_args = " ".join(map(lambda arg: f"--{arg[1]} {arg[0]}", self.args.get_emu_args()))
         print("workload:", workload)
         numa_args = f"numactl -m 1 -C 64-{64+self.args.threads-1}" if self.args.numa else ""
-        return_code = self.__exec_cmd(f'{numa_args} $NOOP_HOME/build/emu -i {workload} {emu_args}')
-        return return_code
+        return self.__exec_cmd(
+            f'{numa_args} $NOOP_HOME/build/emu -i {workload} {emu_args}'
+        )
 
     def run(self, args):
         if args.ci is not None:
@@ -173,17 +173,15 @@ class XiangShan(object):
         valid_actions = map(lambda act: act[1], filter(lambda act: act[0], actions))
         for i, action in enumerate(valid_actions):
             print(f"Action {i}:")
-            ret = action(args)
-            if ret:
+            if ret := action(args):
                 return ret
         return 0
 
     def __exec_cmd(self, cmd):
         env = dict(os.environ)
-        env.update(self.args.get_env_variables())
+        env |= self.args.get_env_variables()
         print("subprocess call cmd:", cmd)
-        return_code = subprocess.call(cmd, shell=True, env=env)
-        return return_code
+        return subprocess.call(cmd, shell=True, env=env)
 
     def __get_ci_cputest(self, name=None):
         base_dir = os.path.join(self.args.am_home, "tests/cputest/build")
@@ -228,8 +226,7 @@ class XiangShan(object):
         }
         for target in all_tests.get(test, self.__get_ci_workloads)(test):
             print(target)
-            ret = self.run_emu(target)
-            if ret:
+            if ret := self.run_emu(target):
                 return ret
         return 0
 

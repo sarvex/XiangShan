@@ -17,10 +17,10 @@ class VerilogModuleGenerator(object):
     self.sequential = []
 
   def __format_width(self, width):
-    return "[{}:0] ".format(width-1) if width > 1 else ""
+    return f"[{width - 1}:0] " if width > 1 else ""
 
   def __format_depth(self, depth):
-    return " [{}:0]".format(depth-1) if depth > 1 else ""
+    return f" [{depth - 1}:0]" if depth > 1 else ""
 
   def add_io(self, io_type, width, name):
     width_str = self.__format_width(width)
@@ -59,14 +59,17 @@ class VerilogModuleGenerator(object):
   %s\n\
   %s\n" % ('\n  '.join(self.decl), '\n  '.join(self.sequential), '\n  '.join(self.combinational))
 
-    s = "\nmodule %s(\n\
+    return ("\nmodule %s(\n\
   %s\n\
 );\n\
 \n\
 %s\
 \n\
-endmodule" % (self.name, ',\n  '.join(self.port_spec), body if not blackbox else blackbox)
-    return s
+endmodule" % (
+        self.name,
+        ',\n  '.join(self.port_spec),
+        body if not blackbox else blackbox,
+    ))
 
 
 class Reshaper(object):
@@ -85,7 +88,7 @@ class Reshaper(object):
     ways_bits = int(math.log2(ways))
     mem.add_decl_wire(new_width, "data_read")
     mem.add_decl_wire(new_width, "data_write")
-    mem.add_combinational(f"assign data_write = ")
+    mem.add_combinational("assign data_write = ")
     sels = [f"{f'(write_way_index == {w}) ?' if w != ways-1 else ''} ({{{new_width-width}'h0, W0_data}} << {width*w})" for w in range(ways)]
     mem.add_combinational(":\n    ".join(sels) + ";")
     mem.add_decl_wire(ways_bits, "read_way_index")
@@ -93,17 +96,17 @@ class Reshaper(object):
     mem.add_decl_wire(ways_bits, "write_way_index")
     mem.add_combinational(f"assign write_way_index = W0_addr[{ways_bits-1}:0];")
     mem.add_combinational(f"{new_name} array (")
-    mem.add_combinational(f"  .W0_clk(W0_clk),")
+    mem.add_combinational("  .W0_clk(W0_clk),")
     mem.add_combinational(f"  .W0_addr(W0_addr[{new_width-1}:{ways_bits}]),")
-    mem.add_combinational(f"  .W0_en(W0_en),")
-    mem.add_combinational(f"  .W0_data(data_write),")
+    mem.add_combinational("  .W0_en(W0_en),")
+    mem.add_combinational("  .W0_data(data_write),")
     mem.add_combinational(f"  .W0_mask({ways}'h1 << write_way_index),")
-    mem.add_combinational(f"  .R0_clk(R0_clk),")
+    mem.add_combinational("  .R0_clk(R0_clk),")
     mem.add_combinational(f"  .R0_addr(R0_addr[{new_width-1}:{ways_bits}]),")
-    mem.add_combinational(f"  .R0_en(R0_en),")
-    mem.add_combinational(f"  .R0_data(data_read)")
-    mem.add_combinational(f");")
-    mem.add_combinational(f"assign R0_data = ")
+    mem.add_combinational("  .R0_en(R0_en),")
+    mem.add_combinational("  .R0_data(data_read)")
+    mem.add_combinational(");")
+    mem.add_combinational("assign R0_data = ")
     sels = [f"{f'(read_way_index == {w}) ?' if w != ways-1 else ''} data_read[{width*(w+1)-1}:{width*w}]" for w in range(ways)]
     mem.add_combinational(":\n    ".join(sels) + ";")
 
@@ -124,13 +127,13 @@ class Spliter(object):
     for i in range(ways):
       data_slice = f"[{new_width*(i+1)-1}:{new_width*i}]"
       mem.add_combinational(f"{new_name} array_{i} (")
-      mem.add_combinational(f"  .RW0_clk(RW0_clk),")
-      mem.add_combinational(f"  .RW0_addr(RW0_addr),")
-      mem.add_combinational(f"  .RW0_en(RW0_en),")
+      mem.add_combinational("  .RW0_clk(RW0_clk),")
+      mem.add_combinational("  .RW0_addr(RW0_addr),")
+      mem.add_combinational("  .RW0_en(RW0_en),")
       mem.add_combinational(f"  .RW0_wmode(RW0_wmode && RW0_wmask[{i}]),")
       mem.add_combinational(f"  .RW0_wdata(RW0_wdata{data_slice}),")
       mem.add_combinational(f"  .RW0_rdata(RW0_rdata{data_slice})")
-      mem.add_combinational(f");")
+      mem.add_combinational(");")
 
 class SRAM(object):
   def __init__(self, line):
@@ -147,19 +150,19 @@ class SRAM(object):
     i = 0
     for i in range(0, len(tokens), 2):
       s = tokens[i]
-      if s == 'name':
+      if s == 'depth':
+        depth = int(tokens[i+1])
+      elif s == 'mask_gran':
+        mask_gran = int(tokens[i+1])
+      elif s == 'name':
         name = tokens[i+1]
+      elif s == 'ports':
+        ports = tokens[i+1].split(',')
       elif s == 'width':
         width = int(tokens[i+1])
         mask_gran = width # default setting
-      elif s == 'depth':
-        depth = int(tokens[i+1])
-      elif s == 'ports':
-        ports = tokens[i+1].split(',')
-      elif s == 'mask_gran':
-        mask_gran = int(tokens[i+1])
       else:
-        sys.exit('%s: unknown argument %s' % (sys.argv[0], i))
+        sys.exit(f'{sys.argv[0]}: unknown argument {i}')
     self.conf = (name, width, depth, mask_gran, width//mask_gran, ports)
   # return (name, width, depth, mask_gran, width//mask_gran, ports)
 
@@ -175,42 +178,42 @@ class SRAM(object):
     maskedports = {}
 
     for pid, ptype in enumerate(ports):
-      if ptype[0:1] == 'm':
+      if ptype[:1] == 'm':
         ptype = ptype[1:]
         maskedports[pid] = pid
 
       if ptype == 'read':
         prefix = 'R%d_' % len(readports)
-        mem.add_input(1, prefix + "clk")
-        mem.add_input(addr_width, prefix + "addr")
-        mem.add_input(1, prefix + "en")
-        mem.add_output(width, prefix + "data")
+        mem.add_input(1, f"{prefix}clk")
+        mem.add_input(addr_width, f"{prefix}addr")
+        mem.add_input(1, f"{prefix}en")
+        mem.add_output(width, f"{prefix}data")
         readports.append(pid)
       elif ptype == 'write':
         prefix = 'W%d_' % len(writeports)
-        mem.add_input(1, prefix + "clk")
-        mem.add_input(addr_width, prefix + "addr")
-        mem.add_input(1, prefix + "en")
-        mem.add_input(width, prefix + "data")
+        mem.add_input(1, f"{prefix}clk")
+        mem.add_input(addr_width, f"{prefix}addr")
+        mem.add_input(1, f"{prefix}en")
+        mem.add_input(width, f"{prefix}data")
         if pid in maskedports:
-          mem.add_input(mask_seg, prefix + "mask")
+          mem.add_input(mask_seg, f"{prefix}mask")
         if not use_latches or pid in maskedports:
           writeports.append(pid)
         else:
           latchports.append(pid)
       elif ptype == 'rw':
         prefix = 'RW%d_' % len(rwports)
-        mem.add_input(1, prefix + "clk")
-        mem.add_input(addr_width, prefix + "addr")
-        mem.add_input(1, prefix + "en")
-        mem.add_input(1, prefix + "wmode")
+        mem.add_input(1, f"{prefix}clk")
+        mem.add_input(addr_width, f"{prefix}addr")
+        mem.add_input(1, f"{prefix}en")
+        mem.add_input(1, f"{prefix}wmode")
         if pid in maskedports:
-          mem.add_input(mask_seg, prefix + "wmask")
-        mem.add_input(width, prefix + "wdata")
-        mem.add_output(width, prefix + "rdata")
+          mem.add_input(mask_seg, f"{prefix}wmask")
+        mem.add_input(width, f"{prefix}wdata")
+        mem.add_output(width, f"{prefix}rdata")
         rwports.append(pid)
       else:
-        sys.exit('%s: unknown port type %s' % (sys.argv[0], ptype))
+        sys.exit(f'{sys.argv[0]}: unknown port type {ptype}')
     self.mem = mem
     self.ports_conf = (readports, writeports, latchports, rwports, maskedports)
 
@@ -226,7 +229,7 @@ class SRAM(object):
     def emit_read(idx, rw):
       prefix = ('RW%d_' if rw else 'R%d_') % idx
       data = ('%srdata' if rw else '%sdata') % prefix
-      en = ('%sen && !%swmode' % (prefix, prefix)) if rw else ('%sen' % prefix)
+      en = f'{prefix}en && !{prefix}wmode' if rw else f'{prefix}en'
       mem.add_decl_reg(1, f"reg_{prefix}ren")
       mem.add_decl_reg(addr_width, f"reg_{prefix}addr")
       mem.add_sequential(f"always @(posedge {prefix}clk)")
@@ -235,17 +238,17 @@ class SRAM(object):
       mem.add_sequential(f"  if ({en}) reg_{prefix}addr <= {prefix}addr;")
       mem.add_combinational("`ifdef RANDOMIZE_GARBAGE_ASSIGN")
       mem.add_combinational(f"reg [{((width-1)//32+1)*32-1}:0] {prefix}random;")
-      mem.add_combinational(f"`ifdef RANDOMIZE_MEM_INIT")
-      mem.add_combinational(f"  initial begin")
-      mem.add_combinational(f"    #`RANDOMIZE_DELAY begin end")
+      mem.add_combinational("`ifdef RANDOMIZE_MEM_INIT")
+      mem.add_combinational("  initial begin")
+      mem.add_combinational("    #`RANDOMIZE_DELAY begin end")
       mem.add_combinational('    %srandom = {%s};' % (prefix, ', '.join(['$random'] * ((width-1)//32+1))))
-      mem.add_combinational('    reg_%sren = %srandom[0];' % (prefix, prefix))
+      mem.add_combinational(f'    reg_{prefix}ren = {prefix}random[0];')
       mem.add_combinational('  end')
       mem.add_combinational('`endif')
       mem.add_combinational('always @(posedge %sclk) %srandom <= {%s};' % (prefix, prefix, ', '.join(['$random'] * ((width-1)//32+1))))
       mem.add_combinational('assign %s = reg_%sren ? ram[reg_%saddr] : %srandom[%d:0];' % (data, prefix, prefix, prefix, width-1))
       mem.add_combinational('`else')
-      mem.add_combinational('assign %s = ram[reg_%saddr];' % (data, prefix))
+      mem.add_combinational(f'assign {data} = ram[reg_{prefix}addr];')
       mem.add_combinational('`endif')
 
     for idx in range(nr):
@@ -260,13 +263,17 @@ class SRAM(object):
       mem.add_decl_reg(width, f"latch_{prefix}data")
       mem.add_decl_reg(1, f"latch_{prefix}en")
       mem.add_combinational('always @(*) begin')
-      mem.add_combinational('  if (!%sclk && %sen) latch_%saddr <= %saddr;' % (prefix, prefix, prefix, prefix))
-      mem.add_combinational('  if (!%sclk && %sen) latch_%sdata <= %sdata;' % (prefix, prefix, prefix, prefix))
-      mem.add_combinational('  if (!%sclk) latch_%sen <= %sen;' % (prefix, prefix, prefix))
+      mem.add_combinational(
+          f'  if (!{prefix}clk && {prefix}en) latch_{prefix}addr <= {prefix}addr;'
+      )
+      mem.add_combinational(
+          f'  if (!{prefix}clk && {prefix}en) latch_{prefix}data <= {prefix}data;'
+      )
+      mem.add_combinational(f'  if (!{prefix}clk) latch_{prefix}en <= {prefix}en;')
       mem.add_combinational('end')
       mem.add_combinational('always @(*)')
-      mem.add_combinational('  if (%sclk && latch_%sen)' % (prefix, prefix))
-      mem.add_combinational('    ram[latch_%saddr] <= latch_%sdata;' % (prefix, prefix))
+      mem.add_combinational(f'  if ({prefix}clk && latch_{prefix}en)')
+      mem.add_combinational(f'    ram[latch_{prefix}addr] <= latch_{prefix}data;')
 
     mem.add_decl_reg(width, "ram", depth)
     mem.add_decl_line('`ifdef RANDOMIZE_MEM_INIT')
@@ -288,22 +295,24 @@ class SRAM(object):
     for idx in range(nw):
       prefix = 'W%d_' % idx
       pid = writeports[idx]
-      mem.add_sequential('always @(posedge %sclk)' % prefix)
-      mem.add_sequential("  if (%sen) begin" % prefix)
+      mem.add_sequential(f'always @(posedge {prefix}clk)')
+      mem.add_sequential(f"  if ({prefix}en) begin")
       for i in range(mask_seg):
         mask = ('if (%smask[%d]) ' % (prefix, i)) if pid in maskedports else ''
         ram_range = '%d:%d' % ((i+1)*mask_gran-1, i*mask_gran)
-        mem.add_sequential("    %sram[%saddr][%s] <= %sdata[%s];" % (mask, prefix, ram_range, prefix, ram_range))
+        mem.add_sequential(
+            f"    {mask}ram[{prefix}addr][{ram_range}] <= {prefix}data[{ram_range}];"
+        )
       mem.add_sequential("  end")
     for idx in range(nrw):
       pid = rwports[idx]
       prefix = 'RW%d_' % idx
-      mem.add_sequential('always @(posedge %sclk)' % prefix)
-      mem.add_sequential("  if (%sen && %swmode) begin" % (prefix, prefix))
+      mem.add_sequential(f'always @(posedge {prefix}clk)')
+      mem.add_sequential(f"  if ({prefix}en && {prefix}wmode) begin")
       if mask_seg > 0:
         mem.add_sequential("    for(i=0;i<%d;i=i+1) begin" % mask_seg)
         if pid in maskedports:
-          mem.add_sequential("      if(%swmask[i]) begin" % prefix)
+          mem.add_sequential(f"      if({prefix}wmask[i]) begin")
           mem.add_sequential("        ram[%saddr][i*%d +: %d] <= %swdata[i*%d +: %d];" %(prefix, mask_gran, mask_gran, prefix, mask_gran, mask_gran))
           mem.add_sequential("      end")
         else:
@@ -342,7 +351,7 @@ class SRAM_TSMC28(SRAM):
   def __reshape(self):
     (name, width, depth, mask_gran, mask_seg, ports) = self.conf
     if width == 2 and depth == 256:
-      new_conf = (name + "_sub", "64", "8", "mwrite,read", "2")
+      new_conf = f"{name}_sub", "64", "8", "mwrite,read", "2"
       line_field = ("name", "depth", "width", "ports", "mask_gran")
       new_line = " ".join(map(lambda x: " ".join(x), zip(line_field, new_conf)))
       new_sram = SRAM_TSMC28(new_line)
@@ -397,10 +406,7 @@ def main(args):
   conf_file = args.conf
   for line in open(conf_file):
     sram = SRAM(line)
-    if args.tsmc28:
-      sram = SRAM_TSMC28(line)
-    else:
-      sram = SRAM(line)
+    sram = SRAM_TSMC28(line) if args.tsmc28 else SRAM(line)
     if f is not None:
         f.write(sram.generate(args.blackbox))
     else:
